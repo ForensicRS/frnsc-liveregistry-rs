@@ -10,7 +10,7 @@ edition = "2021"
 repository = "https://github.com/ForensicRS/forensic-rs"
 
 [dependencies]
-forensic-rs = "*"
+forensic-rs = "0"
 
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
