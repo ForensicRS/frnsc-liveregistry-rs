@@ -32,8 +32,8 @@ impl RegistryReader for LiveRegistryReader {
         let hkey = to_hkey(hkey);
         unsafe {
             let value_name = to_pwstr(name);
+            let mut capacity : u32 = 10_000;
             loop {
-                let mut capacity : u32 = 10_000;
                 let mut readed_data = vec_with_capacity(capacity as usize);
                 let mut data_type : REG_VALUE_TYPE = REG_VALUE_TYPE::default();
                 let reserved : *const u32 = std::ptr::null();
