@@ -10,12 +10,19 @@ use windows::{Win32::{
     }, Foundation::{FILETIME, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
 }, core::{PCWSTR, PWSTR}};
 
+#[derive(Clone, Default)]
 pub struct LiveRegistryReader{
 
 }
 
+impl LiveRegistryReader {
+    pub fn new() -> Self {
+        Self {  }
+    }
+}
+
 impl RegistryReader for LiveRegistryReader {
-    fn open_key(&mut self, hkey : RegHiveKey, name : &str) -> ForensicResult<RegHiveKey> {
+    fn open_key(&self, hkey : RegHiveKey, name : &str) -> ForensicResult<RegHiveKey> {
         let hkey = to_hkey(hkey);
         unsafe {
             let mut new_key = HKEY(0);
@@ -190,6 +197,14 @@ impl RegistryReader for LiveRegistryReader {
             Ok(from_pwstr(&key_name_buff[0..key_name_capacity as usize]))
         }
     }
+
+    fn from_file(&self, _file : Box<dyn forensic_rs::traits::vfs::VirtualFile>) -> ForensicResult<Box<dyn RegistryReader>> {
+        Ok(Box::new(LiveRegistryReader {  }))
+    }
+
+    fn from_fs(&self, _fs : Box<dyn forensic_rs::traits::vfs::VirtualFileSystem>) -> ForensicResult<Box<dyn RegistryReader>> {
+        Ok(Box::new(LiveRegistryReader {  }))
+    }
 }
 
 pub fn vec_with_capacity(capacity : usize) -> Vec<u8> {
@@ -232,5 +247,25 @@ fn from_hkey(hkey : HKEY) -> RegHiveKey {
         HKEY_PERFORMANCE_TEXT => RegHiveKey::HkeyPerformanceText,
         HKEY_USERS => RegHiveKey::HkeyUsers,
         HKEY(v) => RegHiveKey::Hkey(v),
+    }
+}
+
+
+#[cfg(test)]
+mod test_live_registry {
+    use forensic_rs::prelude::{RegistryReader, RegHiveKey::*};
+    use crate::LiveRegistryReader;
+
+    #[test]
+    fn should_list_keys() {
+        let registry = LiveRegistryReader::new();
+        let mut registry : Box<dyn RegistryReader> = Box::new(registry);
+
+        fn test_reg(reg : &mut Box<dyn RegistryReader>) {
+            let keys = reg.enumerate_keys(HkeyCurrentUser).unwrap();
+            assert!(keys.contains(&format!("SOFTWARE")));
+            assert!(keys.contains(&format!("Microsoft")));
+        }
+        test_reg(&mut registry);
     }
 }
