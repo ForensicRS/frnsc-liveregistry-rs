@@ -1,6 +1,6 @@
 [package]
 name = "frnsc-liveregistry-rs"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Samuel Garcés Marín <samuel.garces@protonmail.com>"]
 keywords = ["forensic", "windows", "parser", "registry", "cybersecurity"]
 categories = ["parsing"]
@@ -14,7 +14,7 @@ forensic-rs = "0"
 
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
-version = "0.39.0"
+version = "0.51.1"
 features = [
     "Win32_Foundation", 
     "Win32_System_Registry"

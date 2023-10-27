@@ -41,15 +41,15 @@ impl RegistryReader for LiveRegistryReader {
             loop {
                 let mut readed_data = vec_with_capacity(capacity as usize);
                 let mut data_type : REG_VALUE_TYPE = REG_VALUE_TYPE::default();
-                let reserved : *const u32 = std::ptr::null();
-                let readed = RegQueryValueExW(hkey, PCWSTR(value_name.as_ptr()),reserved as _, &mut data_type,readed_data.as_mut_ptr(), &mut capacity);
-                if readed == ERROR_MORE_DATA {
-                    continue;
-                } else {
-                    if readed.is_err() {
-                        return Err(ForensicError::Other(format!("read_value({}) Win32 error: {}",name,readed.0)));
+                match RegQueryValueExW(hkey, PCWSTR(value_name.as_ptr()),None, Some(&mut data_type),Some(readed_data.as_mut_ptr()), Some(&mut capacity)) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        if err.code() == ERROR_MORE_DATA.to_hresult() {
+                            continue;
+                        }
+                        return Err(ForensicError::Other(format!("read_value({}) Win32 error: {}",name, err.code().0)));
                     }
-                }
+                };
                 readed_data.resize(capacity as usize, 0);
                 return Ok(match data_type {
                     //https://learn.microsoft.com/en-us/windows/win32/sysinfo/registry-value-types
@@ -76,10 +76,7 @@ impl RegistryReader for LiveRegistryReader {
                     REG_SZ => {
                         let mut u16_vec : Vec<u16> = readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16).collect();
                         let _ = u16_vec.pop();//Ends with 00
-                        
-                        let mut ret = String::from_utf16_lossy(&u16_vec);
-                        ret.make_ascii_lowercase();
-                        RegValue::SZ(ret)
+                        RegValue::SZ(String::from_utf16_lossy(&u16_vec))
                     },
                     REG_MULTI_SZ => {
                         let mut returned_strs = Vec::with_capacity(16);
@@ -88,9 +85,7 @@ impl RegistryReader for LiveRegistryReader {
                         for chr in readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16) {
                             if chr == 0 {
                                 if txt_lngt > 0 {
-                                    let mut ret = String::from_utf16_lossy(&txt[0..txt_lngt]);
-                                    ret.make_ascii_lowercase();
-                                    returned_strs.push(ret);
+                                    returned_strs.push(String::from_utf16_lossy(&txt[0..txt_lngt]));
                                 }else{
                                     returned_strs.push(String::new());
                                 }
@@ -108,9 +103,7 @@ impl RegistryReader for LiveRegistryReader {
                     REG_EXPAND_SZ => {
                         let mut u16_vec : Vec<u16> = readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16).collect();
                         let _ = u16_vec.pop();//Ends with 00
-                        let mut ret = String::from_utf16_lossy(&u16_vec);
-                        ret.make_ascii_lowercase();
-                        RegValue::ExpandSZ(ret)
+                        RegValue::ExpandSZ(String::from_utf16_lossy(&u16_vec))
                     },
                     _ => return Err(ForensicError::BadFormat)
                 });
@@ -121,21 +114,22 @@ impl RegistryReader for LiveRegistryReader {
     fn enumerate_values(&self, hkey : RegHiveKey) -> ForensicResult<Vec<String>> {
         let hkey = to_hkey(hkey);
         unsafe {
-            let mut to_ret = Vec::with_capacity(128);
+            let mut to_ret = Vec::with_capacity(512);
             let mut count = 0;
-            let reserved : *const u32 = std::ptr::null();
             loop {
                 let mut key_name_capacity : u32 = 1024;
                 let mut key_name_buff = [0; 1024];
             
                 let mut value_type : u32 = 0;
-                let enumerated = RegEnumValueW(hkey, count, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, reserved as _, &mut value_type,reserved as _, reserved as _);
-                if enumerated.is_err() {
-                    if enumerated == ERROR_NO_MORE_ITEMS {
-                        break;
+                match RegEnumValueW(hkey, count, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, None, Some(&mut value_type) ,None, None){
+                    Ok(_) => {},
+                    Err(err) => {
+                        if err.code() == ERROR_NO_MORE_ITEMS.to_hresult() {
+                            break;
+                        }
+                        return Err(ForensicError::Other(format!("enumerate_values() Win32 error: {}", err.code().0)));
                     }
-                    return Err(ForensicError::Other(format!("enumerate_values() Win32 error: {}",enumerated.0)));
-                }
+                };
                 to_ret.push(from_pwstr(&key_name_buff[0..key_name_capacity as usize]));
                 count += 1;
             }
@@ -147,7 +141,6 @@ impl RegistryReader for LiveRegistryReader {
         let hkey = to_hkey(hkey);
         unsafe {
             let mut count = 0;
-            let reserved : *const u32 = std::ptr::null();
             let mut to_ret = Vec::with_capacity(128);
             loop {
                 let mut key_name_capacity : u32 = 1024;
@@ -158,13 +151,15 @@ impl RegistryReader for LiveRegistryReader {
             
                 let mut last_written : FILETIME = FILETIME::default();
             
-                let enumerated = RegEnumKeyExW(hkey, count, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, reserved as _, PWSTR(key_class_buff.as_mut_ptr()),&mut key_class_capacity, &mut last_written);
-                if enumerated.is_err() {
-                    if enumerated == ERROR_NO_MORE_ITEMS {
-                        break;
+                match RegEnumKeyExW(hkey, count, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, None, PWSTR(key_class_buff.as_mut_ptr()),Some(&mut key_class_capacity), Some(&mut last_written)) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        if err.code() == ERROR_NO_MORE_ITEMS.to_hresult() {
+                            break;
+                        }
+                        return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",err.code().0)));
                     }
-                    return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",enumerated.0)));
-                }
+                 }
                 to_ret.push(from_pwstr(&key_name_buff[0..key_name_capacity as usize]));
                 count += 1;
             }
@@ -175,7 +170,6 @@ impl RegistryReader for LiveRegistryReader {
     fn key_at(&self, hkey : RegHiveKey, pos : u32) -> ForensicResult<String> {
         let hkey = to_hkey(hkey);
         unsafe {
-            let reserved : *const u32 = std::ptr::null();
             let mut key_name_capacity : u32 = 1024;
             let mut key_name_buff = [0; 1024];
         
@@ -184,13 +178,15 @@ impl RegistryReader for LiveRegistryReader {
         
             let mut last_written : FILETIME = FILETIME::default();
         
-            let enumerated = RegEnumKeyExW(hkey, pos, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, reserved as _, PWSTR(key_class_buff.as_mut_ptr()),&mut key_class_capacity, &mut last_written);
-            if enumerated.is_err() {
-                if enumerated == ERROR_NO_MORE_ITEMS {
-                    return Err(ForensicError::NoMoreData);
+            match RegEnumKeyExW(hkey, pos, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, None, PWSTR(key_class_buff.as_mut_ptr()),Some(&mut key_class_capacity), Some(&mut last_written)) {
+                Ok(_) => {},
+                Err(err) => {
+                    if err.code() == ERROR_NO_MORE_ITEMS.to_hresult() {
+                        return Err(ForensicError::NoMoreData);
+                    }
+                    return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",err.code().0)));
                 }
-                return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",enumerated.0)));
-            }
+            };
             Ok(from_pwstr(&key_name_buff[0..key_name_capacity as usize]))
         }
     }
@@ -198,17 +194,18 @@ impl RegistryReader for LiveRegistryReader {
     fn value_at(&self, hkey : RegHiveKey, pos : u32) -> ForensicResult<String> {
         let hkey = to_hkey(hkey);
         unsafe {
-            let reserved : *const u32 = std::ptr::null();
             let mut key_name_capacity : u32 = 1024;
             let mut key_name_buff = [0; 1024];
         
             let mut value_type : u32 = 0;
-            let enumerated = RegEnumValueW(hkey, pos, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, reserved as _, &mut value_type,reserved as _, reserved as _);
-            if enumerated.is_err() {
-                if enumerated == ERROR_NO_MORE_ITEMS {
-                    return Err(ForensicError::NoMoreData);
+            match RegEnumValueW(hkey, pos, PWSTR(key_name_buff.as_mut_ptr()),&mut key_name_capacity, None, Some(&mut value_type), None, None) {
+                Ok(_) => {},
+                Err(err) => {
+                    if err.code() == ERROR_NO_MORE_ITEMS.to_hresult() {
+                        return Err(ForensicError::NoMoreData);
+                    }
+                    return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",err.code().0)));
                 }
-                return Err(ForensicError::Other(format!("enumerate_keys() Win32 error: {}",enumerated.0)));
             }
             Ok(from_pwstr(&key_name_buff[0..key_name_capacity as usize]))
         }
@@ -234,9 +231,7 @@ pub fn to_pwstr(val: &str) -> Vec<u16> {
 }
 
 pub fn from_pwstr(val: &[u16]) -> String {
-    let mut ret = String::from_utf16_lossy(val);
-    ret.make_ascii_lowercase();
-    ret
+    String::from_utf16_lossy(val)
 }
 fn to_hkey(hkey : RegHiveKey) -> HKEY {
     match hkey {
@@ -282,8 +277,8 @@ mod test_live_registry {
         fn test_reg(reg : &mut Box<dyn RegistryReader>) {
             let keys = reg.enumerate_keys(HkeyCurrentUser).unwrap();
             println!("{:?}", keys);
-            assert!(keys.contains(&format!("software")));
-            assert!(keys.contains(&format!("environment")));
+            assert!(keys.contains(&format!("Software")));
+            assert!(keys.contains(&format!("Environment")));
         }
         test_reg(&mut registry);
     }
