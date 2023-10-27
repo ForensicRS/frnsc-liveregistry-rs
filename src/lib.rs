@@ -5,9 +5,7 @@ use forensic_rs::prelude::{RegHiveKey, ForensicResult, ForensicError, RegValue, 
 use std::convert::TryInto;
 
 use windows::{Win32::{
-    System::{
-        Registry::{HKEY, REG_DWORD, REG_VALUE_TYPE, RegQueryValueExW, REG_SZ, RegEnumKeyExW, HKEY_USERS, REG_MULTI_SZ, REG_QWORD, REG_BINARY, HKEY_CLASSES_ROOT, HKEY_CURRENT_CONFIG, HKEY_CURRENT_USER, HKEY_DYN_DATA, HKEY_LOCAL_MACHINE, HKEY_PERFORMANCE_DATA, HKEY_PERFORMANCE_NLSTEXT, HKEY_PERFORMANCE_TEXT, REG_EXPAND_SZ, RegOpenKeyW, RegEnumValueW},
-    }, Foundation::{FILETIME, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
+    System::Registry::{HKEY, REG_DWORD, REG_VALUE_TYPE, RegQueryValueExW, REG_SZ, RegEnumKeyExW, HKEY_USERS, REG_MULTI_SZ, REG_QWORD, REG_BINARY, HKEY_CLASSES_ROOT, HKEY_CURRENT_CONFIG, HKEY_CURRENT_USER, HKEY_DYN_DATA, HKEY_LOCAL_MACHINE, HKEY_PERFORMANCE_DATA, HKEY_PERFORMANCE_NLSTEXT, HKEY_PERFORMANCE_TEXT, REG_EXPAND_SZ, RegOpenKeyW, RegEnumValueW}, Foundation::{FILETIME, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
 }, core::{PCWSTR, PWSTR}};
 
 #[derive(Clone, Default)]
@@ -79,13 +77,30 @@ impl RegistryReader for LiveRegistryReader {
                         let mut u16_vec : Vec<u16> = readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16).collect();
                         let _ = u16_vec.pop();//Ends with 00
                         
-                        RegValue::SZ(String::from_utf16_lossy(&u16_vec))
+                        let mut ret = String::from_utf16_lossy(&u16_vec);
+                        ret.make_ascii_lowercase();
+                        RegValue::SZ(ret)
                     },
                     REG_MULTI_SZ => {
-                        let mut u16_vec : Vec<u16> = readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16).collect();
-                        let _ = u16_vec.pop();//Ends with 00
-                        
-                        RegValue::MultiSZ(String::from_utf16_lossy(&u16_vec))
+                        let mut returned_strs = Vec::with_capacity(16);
+                        let mut txt = Vec::with_capacity(capacity as usize);
+                        let mut txt_lngt = 0;
+                        for chr in readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16) {
+                            if chr == 0 {
+                                if txt_lngt > 0 {
+                                    let mut ret = String::from_utf16_lossy(&txt[0..txt_lngt]);
+                                    ret.make_ascii_lowercase();
+                                    returned_strs.push(ret);
+                                }else{
+                                    returned_strs.push(String::new());
+                                }
+                                txt_lngt = 0;
+                            }else{
+                                txt[txt_lngt] = chr;
+                                txt_lngt += 1;
+                            }
+                        }
+                        RegValue::MultiSZ(returned_strs)
                     },
                     REG_BINARY => {
                         RegValue::Binary(readed_data)
@@ -93,8 +108,9 @@ impl RegistryReader for LiveRegistryReader {
                     REG_EXPAND_SZ => {
                         let mut u16_vec : Vec<u16> = readed_data[0..capacity as usize].chunks(2).map(|v| (v[1] as u16) << 8 | v[0] as u16).collect();
                         let _ = u16_vec.pop();//Ends with 00
-                        
-                        RegValue::ExpandSZ(String::from_utf16_lossy(&u16_vec))
+                        let mut ret = String::from_utf16_lossy(&u16_vec);
+                        ret.make_ascii_lowercase();
+                        RegValue::ExpandSZ(ret)
                     },
                     _ => return Err(ForensicError::BadFormat)
                 });
@@ -218,7 +234,9 @@ pub fn to_pwstr(val: &str) -> Vec<u16> {
 }
 
 pub fn from_pwstr(val: &[u16]) -> String {
-    String::from_utf16_lossy(val)
+    let mut ret = String::from_utf16_lossy(val);
+    ret.make_ascii_lowercase();
+    ret
 }
 fn to_hkey(hkey : RegHiveKey) -> HKEY {
     match hkey {
@@ -263,8 +281,9 @@ mod test_live_registry {
 
         fn test_reg(reg : &mut Box<dyn RegistryReader>) {
             let keys = reg.enumerate_keys(HkeyCurrentUser).unwrap();
-            assert!(keys.contains(&format!("SOFTWARE")));
-            assert!(keys.contains(&format!("Microsoft")));
+            println!("{:?}", keys);
+            assert!(keys.contains(&format!("software")));
+            assert!(keys.contains(&format!("environment")));
         }
         test_reg(&mut registry);
     }
