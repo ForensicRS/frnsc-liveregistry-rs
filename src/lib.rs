@@ -5,7 +5,7 @@ use forensic_rs::prelude::{RegHiveKey, ForensicResult, ForensicError, RegValue, 
 use std::convert::TryInto;
 
 use windows::{Win32::{
-    System::Registry::{HKEY, REG_DWORD, REG_VALUE_TYPE, RegQueryValueExW, REG_SZ, RegEnumKeyExW, HKEY_USERS, REG_MULTI_SZ, REG_QWORD, REG_BINARY, HKEY_CLASSES_ROOT, HKEY_CURRENT_CONFIG, HKEY_CURRENT_USER, HKEY_DYN_DATA, HKEY_LOCAL_MACHINE, HKEY_PERFORMANCE_DATA, HKEY_PERFORMANCE_NLSTEXT, HKEY_PERFORMANCE_TEXT, REG_EXPAND_SZ, RegOpenKeyW, RegEnumValueW}, Foundation::{FILETIME, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
+    System::Registry::{HKEY, REG_DWORD, REG_VALUE_TYPE, RegQueryValueExW, REG_SZ, RegEnumKeyExW, HKEY_USERS, REG_MULTI_SZ, REG_QWORD, REG_BINARY, HKEY_CLASSES_ROOT, HKEY_CURRENT_CONFIG, HKEY_CURRENT_USER, HKEY_DYN_DATA, HKEY_LOCAL_MACHINE, HKEY_PERFORMANCE_DATA, HKEY_PERFORMANCE_NLSTEXT, HKEY_PERFORMANCE_TEXT, REG_EXPAND_SZ, RegOpenKeyW, RegEnumValueW, RegCloseKey}, Foundation::{FILETIME, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS},
 }, core::{PCWSTR, PWSTR}};
 
 #[derive(Clone, Default)]
@@ -217,6 +217,17 @@ impl RegistryReader for LiveRegistryReader {
 
     fn from_fs(&self, _fs : Box<dyn forensic_rs::traits::vfs::VirtualFileSystem>) -> ForensicResult<Box<dyn RegistryReader>> {
         Ok(Box::new(LiveRegistryReader {  }))
+    }
+    fn close_key(&self, key : RegHiveKey) {
+        match key {
+            RegHiveKey::Hkey(key) => {
+                match unsafe { RegCloseKey(HKEY(key)) } {
+                    Ok(_) => {},
+                    Err(_) => {},
+                }
+            },
+            _ => {},
+        }
     }
 }
 
