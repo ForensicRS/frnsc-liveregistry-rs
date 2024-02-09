@@ -10,7 +10,7 @@ edition = "2021"
 repository = "https://github.com/ForensicRS/frnsc-liveregistry-rs"
 
 [dependencies]
-forensic-rs = "0.8"
+forensic-rs = "0"
 
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
