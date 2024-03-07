@@ -1,7 +1,7 @@
 extern crate forensic_rs;
 extern crate windows;
 
-use forensic_rs::prelude::{ForensicError, ForensicResult, RegHiveKey, RegValue, RegistryReader};
+use forensic_rs::{prelude::{ForensicError, ForensicResult, RegHiveKey, RegValue, RegistryReader}, traits::registry::RegistryKeyInfo, utils::time::Filetime};
 use std::convert::TryInto;
 
 use windows::{
@@ -347,6 +347,39 @@ impl RegistryReader for LiveRegistryReader {
             _ => {},
         }
     }
+    fn key_info(&self, hkey: RegHiveKey) -> ForensicResult<RegistryKeyInfo> {
+        let hkey = to_hkey(hkey);
+        unsafe {
+            let mut max_value_name_length = 0;
+            let mut values = 0;
+            let mut max_value_length = 0;
+            let mut subkeys = 0;
+            let mut max_subkey_name_length = 0;
+            let mut last_write_time = windows::Win32::Foundation::FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+            let _ = RegQueryInfoKeyW(
+                hkey,
+                PWSTR::null(),
+                None,
+                None,
+                Some(&mut subkeys),
+                Some(&mut max_subkey_name_length),
+                None,
+                Some(&mut values),
+                Some(&mut max_value_name_length),
+                Some(&mut max_value_length),
+                None,
+                Some(&mut last_write_time),
+            );
+            Ok(RegistryKeyInfo {
+                last_write_time : Filetime::new(((last_write_time.dwHighDateTime as u64) << 32) + last_write_time.dwLowDateTime as u64),
+                max_subkey_name_length,
+                max_value_length,
+                max_value_name_length,
+                subkeys,
+                values
+            })
+        }
+    }
 }
 
 pub fn vec_with_capacity(capacity: usize) -> Vec<u8> {
@@ -421,6 +454,7 @@ mod test_live_registry {
             println!("{:?}", keys);
             assert!(keys.contains(&format!("Software")));
             assert!(keys.contains(&format!("Environment")));
+            let _info = reg.key_info(HkeyCurrentUser).unwrap();
         }
         test_reg(&mut registry);
     }

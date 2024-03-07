@@ -1,6 +1,6 @@
 [package]
 name = "frnsc-liveregistry-rs"
-version = "0.9.1"
+version = "0.12.0"
 authors = ["Samuel Garcés Marín <samuel.garces@protonmail.com>"]
 keywords = ["forensic", "windows", "parser", "registry", "cybersecurity"]
 categories = ["parsing"]
@@ -10,7 +10,7 @@ edition = "2021"
 repository = "https://github.com/ForensicRS/frnsc-liveregistry-rs"
 
 [dependencies]
-forensic-rs = "0.9"
+forensic-rs = "0.12"
 
 
 [target.'cfg(target_os = "windows")'.dependencies.windows]
