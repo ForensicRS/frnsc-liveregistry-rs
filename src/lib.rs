@@ -109,7 +109,7 @@ impl RegistryReader for LiveRegistryReader {
                 }
                 REG_MULTI_SZ => {
                     let mut returned_strs = Vec::with_capacity(16);
-                    let mut txt = Vec::with_capacity(capacity as usize);
+                    let mut txt = vec![0; capacity as usize];
                     let mut txt_lngt = 0;
                     for chr in readed_data[0..capacity as usize]
                         .chunks(2)
