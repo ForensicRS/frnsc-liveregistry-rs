@@ -1,3 +1,10 @@
+//! Live Windows registry reader — implements `forensic_rs::traits::registry::Registry`
+//! against the real Win32 registry API. Windows-only: the whole crate body is
+//! gated so it compiles to an empty (but valid) crate on any other OS, letting
+//! a downstream crate depend on it unconditionally and `#[cfg(windows)]`-gate
+//! only its own use of `LiveRegistryReader`.
+#![cfg(target_os = "windows")]
+
 extern crate forensic_rs;
 extern crate windows;
 
